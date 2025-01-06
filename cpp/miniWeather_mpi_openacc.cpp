@@ -17,6 +17,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define NO_INFORM
+#define BENCHMARK_OUTPUT
+
 constexpr double pi = 3.14159265358979323846264338327; // Pi
 constexpr double grav = 9.8; // Gravitational acceleration (m / s^2)
 constexpr double cp = 1004.; // Specific heat of dry air at constant pressure
@@ -233,19 +236,35 @@ int main(int argc, char **argv) {
     }
 #pragma acc wait
     auto t2 = std::chrono::steady_clock::now();
+    #ifndef NO_INFORM
     if (mainproc) {
       std::cout << "CPU Time: "
                 << std::chrono::duration<double>(t2 - t1).count() << " sec\n";
     }
+    #endif
+
+  #ifdef BENCHMARK_OUTPUT
+  if (mainproc) {
+    printf("%lf,%i,", std::chrono::duration<double>(t2 - t1).count(), nranks);
+  }
+  #endif
 
     // Final reductions for mass, kinetic energy, and total energy
     reductions(mass, te);
   }
 
+  #ifdef BENCHMARK_OUTPUT
+  if (mainproc) {
+    printf("%le\n", (mass - mass0) / mass0);
+  }
+  #endif
+
+  #ifndef NO_INFORM
   if (mainproc) {
     printf("d_mass: %le\n", (mass - mass0) / mass0);
     printf("d_te:   %le\n", (te - te0) / te0);
   }
+  #endif
 
   finalize();
 }
@@ -707,12 +726,14 @@ void init(int *argc, char ***argv) {
   etime = 0.;
   output_counter = 0.;
 
+  #ifndef NO_INFORM
   // If I'm the main process in MPI, display some grid information
   if (mainproc) {
     printf("nx_glob, nz_glob: %d %d\n", nx_glob, nz_glob);
     printf("dx,dz: %lf %lf\n", dx, dz);
     printf("dt: %lf\n", dt);
   }
+  #endif
   // Want to make sure this info is displayed before further output
   ierr = MPI_Barrier(MPI_COMM_WORLD);
 
@@ -967,9 +988,11 @@ void output(double *state, double etime) {
     async
 #pragma acc wait
   // Inform the user
+  #ifndef NO_INFORM
   if (mainproc) {
     printf("*** OUTPUT ***\n");
   }
+  #endif
   // Allocate some (big) temp arrays
   dens = (double *)malloc(nx * nz * sizeof(double));
   uwnd = (double *)malloc(nx * nz * sizeof(double));
